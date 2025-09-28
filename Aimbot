@@ -1,0 +1,190 @@
+-- LocalScript (StarterPlayerScripts hoặc StarterGui)
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local RunService = game:GetService("RunService")
+
+-- GUI chính
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AimbotGui"
+screenGui.Parent = playerGui
+screenGui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 220, 0, 140)
+frame.Position = UDim2.new(0, 20, 0.2, 0)
+frame.BackgroundColor3 = Color3.fromRGB(0, 119, 190) -- ocean
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = screenGui
+
+-- Viền cầu vồng
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 3
+stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+stroke.Parent = frame
+
+task.spawn(function()
+    local hue = 0
+    while true do
+        hue = (hue + 1) % 360
+        stroke.Color = Color3.fromHSV(hue/360, 1, 1)
+        task.wait(0.05)
+    end
+end)
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 32)
+title.BackgroundColor3 = Color3.fromRGB(0, 90, 160)
+title.Text = "Aimbot"
+title.TextColor3 = Color3.new(1,1,1)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+title.Parent = frame
+
+-- Dropdown button
+local dropBtn = Instance.new("TextButton")
+dropBtn.Size = UDim2.new(1, -10, 0, 32)
+dropBtn.Position = UDim2.new(0, 5, 0, 40)
+dropBtn.BackgroundColor3 = Color3.fromRGB(40,90,140)
+dropBtn.Text = "Chọn target ▼"
+dropBtn.TextColor3 = Color3.new(1,1,1)
+dropBtn.Font = Enum.Font.SourceSans
+dropBtn.TextSize = 14
+dropBtn.Parent = frame
+
+-- Dropdown frame
+local dropFrame = Instance.new("Frame")
+dropFrame.Size = UDim2.new(1, -10, 0, 120)
+dropFrame.Position = UDim2.new(0, 5, 0, 72)
+dropFrame.BackgroundColor3 = Color3.fromRGB(20,60,100)
+dropFrame.Visible = false
+dropFrame.Parent = frame
+
+local uiList = Instance.new("UIListLayout")
+uiList.Parent = dropFrame
+uiList.Padding = UDim.new(0,4)
+
+-- Toggle
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(1, -10, 0, 32)
+toggleBtn.Position = UDim2.new(0, 5, 1, -40)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+toggleBtn.Text = "Target: OFF"
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextSize = 16
+toggleBtn.Parent = frame
+
+-- Trạng thái
+local selectedTarget = nil
+local targetOn = false
+local currentHighlight = nil
+
+-- Highlight ESP
+local function applyHighlight(targetChar)
+    if currentHighlight then currentHighlight:Destroy() end
+    if targetChar then
+        local hl = Instance.new("Highlight")
+        hl.Name = "TargetHighlight"
+        hl.FillTransparency = 1
+        hl.OutlineColor = Color3.fromRGB(255, 255, 0)
+        hl.OutlineTransparency = 0
+        hl.Parent = targetChar
+        currentHighlight = hl
+    end
+end
+
+local function clearHighlight()
+    if currentHighlight then
+        currentHighlight:Destroy()
+        currentHighlight = nil
+    end
+end
+
+-- Refresh dropdown
+local function refreshDropdown()
+    for _,child in ipairs(dropFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, -4, 0, 28)
+            btn.BackgroundColor3 = Color3.fromRGB(40,90,140)
+            btn.Text = plr.Name
+            btn.TextColor3 = Color3.new(1,1,1)
+            btn.Font = Enum.Font.SourceSans
+            btn.TextSize = 14
+            btn.Parent = dropFrame
+            btn.MouseButton1Click:Connect(function()
+                selectedTarget = plr
+                dropBtn.Text = "Target: "..plr.Name.." ▼"
+                dropFrame.Visible = false
+                toggleBtn.Text = "Target: OFF ("..plr.Name..")"
+                clearHighlight()
+                if plr.Character then
+                    applyHighlight(plr.Character)
+                end
+                plr.CharacterAdded:Connect(function(char)
+                    if targetOn and selectedTarget == plr then
+                        applyHighlight(char)
+                    end
+                end)
+            end)
+        end
+    end
+end
+
+refreshDropdown()
+Players.PlayerAdded:Connect(refreshDropdown)
+Players.PlayerRemoving:Connect(function(plr)
+    if plr == selectedTarget then
+        clearHighlight()
+        selectedTarget = nil
+        targetOn = false
+        toggleBtn.Text = "Target: OFF"
+        dropBtn.Text = "Chọn target ▼"
+    end
+    refreshDropdown()
+end)
+
+-- Toggle dropdown
+dropBtn.MouseButton1Click:Connect(function()
+    dropFrame.Visible = not dropFrame.Visible
+end)
+
+-- Toggle lock-on
+toggleBtn.MouseButton1Click:Connect(function()
+    if selectedTarget then
+        targetOn = not targetOn
+        if targetOn then
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
+            toggleBtn.Text = "Target: ON ("..selectedTarget.Name..")"
+            if selectedTarget.Character then
+                applyHighlight(selectedTarget.Character)
+            end
+        else
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(0,150,0)
+            toggleBtn.Text = "Target: OFF ("..selectedTarget.Name..")"
+            clearHighlight()
+        end
+    end
+end)
+
+-- Lock-on loop
+RunService.RenderStepped:Connect(function()
+    if targetOn and selectedTarget then
+        local char = player.Character
+        local targetChar = selectedTarget.Character
+        if char and char:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
+            local hrp = char.HumanoidRootPart
+            local tHrp = targetChar.HumanoidRootPart
+            local lookVector = (tHrp.Position - hrp.Position).Unit
+            hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
+        end
+    end
+end)
